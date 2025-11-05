@@ -1,198 +1,204 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Simple Platformer with Finish Line</title>
-<style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: linear-gradient(#87ceeb, #b3e5fc);
-  }
-  canvas {
-    display: block;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vampire Survivors - Rebotes</title>
+  <style>
+    :root{--bg:#0b0f14;--ui:#e6eef8;--accent:#ff6b6b}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto;}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#071018,#0b0f14);color:var(--ui)}
+    #gameWrap{width:900px;max-width:95vw;background:rgba(255,255,255,0.02);border-radius:12px;padding:12px;box-shadow:0 8px 30px rgba(2,6,23,0.7)}
+    canvas{display:block;background:#071018;border-radius:8px;image-rendering:pixelated}
+    .hud{display:flex;gap:12px;align-items:center;margin-top:8px}
+    .panel{background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:8px;font-size:14px}
+    .big{font-weight:700;font-size:16px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 10px;border-radius:8px;color:var(--ui);cursor:pointer}
+    .controls{margin-top:8px;font-size:13px;color:#bcd}
+  </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+  <div id="gameWrap">
+    <canvas id="c" width="900" height="600"></canvas>
+    <div class="hud">
+      <div class="panel big">Vida: <span id="hp">100</span></div>
+      <div class="panel">Tiempo: <span id="time">0</span>s</div>
+      <div class="panel">Enemigos: <span id="enemies">0</span></div>
+      <div class="panel">Power-ups: <span id="powerups">0</span></div>
+      <div style="flex:1"></div>
+      <button id="restart">Reiniciar</button>
+    </div>
+    <div class="controls">
+      Controles: WASD / Flechas para mover. Dispara automáticamente al enemigo más cercano. Los power-ups mejoran regeneración, daño, cantidad de disparos, rebotes y velocidad de disparo.
+    </div>
+  </div>
+
 <script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+let keys={};
 
-canvas.width = 800;
-canvas.height = 450;
-
-const gravity = 0.6;
-let keys = {};
-
-class Player {
-  constructor() {
-    this.width = 40;
-    this.height = 60;
-    this.x = 100;
-    this.y = canvas.height - this.height - 50;
-    this.dy = 0;
-    this.speed = 5;
-    this.jumpPower = 12;
-    this.onGround = false;
+class Player{
+  constructor(){
+    this.x=W/2;this.y=H/2;this.r=12;this.speed=2.2;this.hp=100;this.fireRate=30;this.fireTimer=0;
+    this.score=0;this.bullets=[];
+    this.damage=1;this.regen=0;this.extraShots=0;this.fireSpeedBoost=0;this.bounceLevel=0;
   }
+  update(){
+    let dx=0,dy=0;
+    if(keys['ArrowUp']||keys['w']) dy=-1;
+    if(keys['ArrowDown']||keys['s']) dy=1;
+    if(keys['ArrowLeft']||keys['a']) dx=-1;
+    if(keys['ArrowRight']||keys['d']) dx=1;
+    if(dx||dy){let len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;this.x+=dx*this.speed;this.y+=dy*this.speed;}
+    this.x=Math.max(this.r,Math.min(W-this.r,this.x));
+    this.y=Math.max(this.r,Math.min(H-this.r,this.y));
 
-  draw() {
-    ctx.fillStyle = "#ff5733";
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    this.fireTimer++;
+    let rate = Math.max(5, this.fireRate - this.fireSpeedBoost);
+    if(this.fireTimer>=rate){this.fireTimer=0;this.shoot();}
+
+    for(let b of this.bullets)b.update();
+    this.bullets=this.bullets.filter(b=>!b.dead);
+
+    if(this.regen>0 && frame%60===0 && this.hp<100)this.hp=Math.min(100,this.hp+this.regen);
   }
+  shoot(){
+    if(enemies.length===0)return;
+    enemies.sort((a,b)=>Math.hypot(a.x-this.x,a.y-this.y)-Math.hypot(b.x-this.x,b.y-this.y));
+    let target=enemies[0];
+    if(!target)return;
+    let ang=Math.atan2(target.y-this.y,target.x-this.x);
+    let spread=0.15;
+    let count=1+this.extraShots;
+    for(let i=0;i<count;i++){
+      let a=ang+((i-(count-1)/2)*spread);
+      let vx=Math.cos(a)*5,vy=Math.sin(a)*5;
+      this.bullets.push(new Bullet(this.x,this.y,vx,vy,this.damage,this.bounceLevel));
+    }
+  }
+  draw(){ctx.fillStyle='#ff9b9b';ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();for(let b of this.bullets)b.draw();}
+}
 
-  update(platforms) {
-    // Horizontal movement
-    if (keys["ArrowRight"]) this.x += this.speed;
-    if (keys["ArrowLeft"]) this.x -= this.speed;
-
-    // Gravity
-    this.y += this.dy;
-    this.dy += gravity;
-
-    // Check platform collisions
-    this.onGround = false;
-    for (let p of platforms) {
-      if (
-        this.x < p.x + p.width &&
-        this.x + this.width > p.x &&
-        this.y + this.height <= p.y + this.dy &&
-        this.y + this.height + this.dy >= p.y
-      ) {
-        this.dy = 0;
-        this.y = p.y - this.height;
-        this.onGround = true;
+class Bullet{
+  constructor(x,y,vx,vy,damage,bounces){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.damage=damage;this.life=100;this.dead=false;this.r=3;this.bounces=bounces;}
+  update(){
+    this.x+=this.vx;this.y+=this.vy;this.life--;if(this.life<=0)this.dead=true;
+    for(let e of enemies){
+      if(e.dead)continue;
+      let d=Math.hypot(this.x-e.x,this.y-e.y);
+      if(d<e.r+this.r){
+        e.hp-=this.damage*4;
+        if(e.hp<=0){e.dead=true;player.score++;dropPowerUp(e.x,e.y);}
+        if(this.bounces>0){
+          this.bounces--;
+          let targets=enemies.filter(en=>!en.dead && en!==e);
+          if(targets.length>0){
+            let t=targets[Math.floor(Math.random()*targets.length)];
+            let a=Math.atan2(t.y-this.y,t.x-this.x);
+            this.vx=Math.cos(a)*5;this.vy=Math.sin(a)*5;
+          } else this.dead=true;
+        } else {
+          this.dead=true;
+        }
       }
     }
+  }
+  draw(){ctx.fillStyle='#fdd';ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}
+}
 
-    // Floor limit
-    if (this.y + this.height > canvas.height) {
-      this.y = canvas.height - this.height;
-      this.dy = 0;
-      this.onGround = true;
+class Enemy{
+  constructor(x,y,hp){this.x=x;this.y=y;this.r=10;this.speed=0.6+Math.random()*0.8;this.hp=hp;this.dead=false;}
+  update(){let ang=Math.atan2(player.y-this.y,player.x-this.x);this.x+=Math.cos(ang)*this.speed;this.y+=Math.sin(ang)*this.speed;}
+  draw(){ctx.fillStyle='rgba(180,100,100,0.95)';ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}
+}
+
+class PowerUp{
+  constructor(x,y,type){this.x=x;this.y=y;this.r=8;this.type=type;this.life=600;this.dead=false;}
+  update(){this.life--;if(this.life<=0)this.dead=true;}
+  draw(){
+    ctx.beginPath();
+    const colors={regen:'#6ff',damage:'#f66',multi:'#ff0',fireRate:'#f0f',bounce:'#0f0'};
+    ctx.fillStyle=colors[this.type]||'#fff';
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.font='10px monospace';ctx.fillStyle='#fff';ctx.textAlign='center';
+    ctx.fillText(this.type,this.x,this.y-10);
+  }
+}
+
+let player=new Player();
+let enemies=[],powerups=[];
+let frame=0,elapsed=0,spawnRate=100,running=true,difficulty=1;
+
+function spawnEnemy(){
+  let side=Math.floor(Math.random()*4);
+  let x=(side===0)?-20:(side===1)?W+20:Math.random()*W;
+  let y=(side===2)?-20:(side===3)?H+20:Math.random()*H;
+  enemies.push(new Enemy(x,y,15*difficulty));
+}
+
+function dropPowerUp(x,y){
+  if(Math.random()<0.3){
+    const types=['regen','damage','multi','fireRate','bounce'];
+    const type=types[Math.floor(Math.random()*types.length)];
+    powerups.push(new PowerUp(x,y,type));
+  }
+}
+
+function update(){
+  if(!running)return;
+  frame++;
+  player.update();
+  for(let e of enemies)e.update();
+  for(let p of powerups)p.update();
+
+  for(let e of enemies){
+    if(e.dead)continue;
+    let d=Math.hypot(e.x-player.x,e.y-player.y);
+    if(d<e.r+player.r){e.dead=true;player.hp-=8;if(player.hp<=0)endGame();}
+  }
+
+  for(let p of powerups){
+    let d=Math.hypot(p.x-player.x,p.y-player.y);
+    if(d<p.r+player.r){
+      p.dead=true;
+      if(p.type==='regen') player.regen+=0.5;
+      else if(p.type==='damage') player.damage+=0.5;
+      else if(p.type==='multi') player.extraShots++;
+      else if(p.type==='fireRate') player.fireSpeedBoost+=2;
+      else if(p.type==='bounce') player.bounceLevel++;
     }
-
-    this.draw();
   }
 
-  jump() {
-    if (this.onGround) {
-      this.dy = -this.jumpPower;
-      this.onGround = false;
-    }
-  }
+  enemies=enemies.filter(e=>!e.dead);
+  powerups=powerups.filter(p=>!p.dead);
+
+  if(frame%60===0){elapsed++;if(elapsed%15===0){difficulty+=0.5;spawnRate=Math.max(30,spawnRate-5);}}
+  if(frame%Math.max(10,spawnRate-Math.floor(elapsed*1.2))===0){for(let i=0;i<Math.min(1+Math.floor(elapsed/8),10);i++)spawnEnemy();}
+
+  document.getElementById('hp').textContent=Math.max(0,Math.round(player.hp));
+  document.getElementById('time').textContent=elapsed;
+  document.getElementById('enemies').textContent=enemies.length;
+  document.getElementById('powerups').textContent=powerups.length;
 }
 
-class Platform {
-  constructor(x, y, width, height) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-  }
-
-  draw() {
-    ctx.fillStyle = "#5D4037";
-    ctx.fillRect(this.x, this.y, this.width, this.height);
-    ctx.fillStyle = "#795548";
-    ctx.fillRect(this.x, this.y, this.width, 5); // top edge
-  }
+function draw(){
+  ctx.fillStyle='#071018';ctx.fillRect(0,0,W,H);
+  player.draw();
+  for(let e of enemies)e.draw();
+  for(let p of powerups)p.draw();
+  ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.fillText('Puntuación: '+player.score,10,H-10);
 }
 
-const player = new Player();
-const levelLength = 2400;
-const platforms = [
-  new Platform(0, canvas.height - 30, levelLength, 30),
-  new Platform(150, 350, 100, 15),
-  new Platform(400, 280, 120, 15),
-  new Platform(650, 200, 100, 15),
-  new Platform(900, 330, 150, 15),
-  new Platform(1150, 270, 100, 15),
-  new Platform(1400, 230, 120, 15),
-  new Platform(1650, 300, 100, 15),
-  new Platform(1900, 250, 120, 15),
-  new Platform(2150, 350, 100, 15)
-];
+function loop(){update();draw();if(running)requestAnimationFrame(loop);}
+function endGame(){running=false;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);ctx.fillStyle='white';ctx.font='36px sans-serif';ctx.textAlign='center';ctx.fillText('GAME OVER',W/2,H/2);}
+addEventListener('keydown',e=>keys[e.key]=true);
+addEventListener('keyup',e=>keys[e.key]=false);
 
-// Finish line flag
-const finishLineX = levelLength - 100;
-
-function drawFinishLine(offsetX) {
-  const flagX = finishLineX - offsetX;
-  const flagY = canvas.height - 150;
-  ctx.fillStyle = "#555";
-  ctx.fillRect(flagX, flagY, 5, 120); // pole
-  ctx.fillStyle = "#FFD700";
-  ctx.beginPath();
-  ctx.moveTo(flagX + 5, flagY);
-  ctx.lineTo(flagX + 60, flagY + 20);
-  ctx.lineTo(flagX + 5, flagY + 40);
-  ctx.closePath();
-  ctx.fill();
-  ctx.font = "20px Arial";
-  ctx.fillStyle = "#000";
-  ctx.fillText("🏁", flagX + 15, flagY - 10);
-}
-
-let cameraOffsetX = 0;
-
-function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Smooth camera follow
-  cameraOffsetX = player.x - canvas.width / 2 + player.width / 2;
-  if (cameraOffsetX < 0) cameraOffsetX = 0;
-  if (cameraOffsetX > levelLength - canvas.width)
-    cameraOffsetX = levelLength - canvas.width;
-
-  // Draw background ground texture
-  ctx.fillStyle = "#4CAF50";
-  ctx.fillRect(-cameraOffsetX, canvas.height - 30, levelLength, 30);
-  ctx.fillStyle = "#2E7D32";
-  for (let i = 0; i < levelLength; i += 40) {
-    ctx.fillRect(i - cameraOffsetX, canvas.height - 25, 20, 5);
-  }
-
-  // Draw platforms
-  platforms.forEach(p => {
-    ctx.save();
-    ctx.translate(-cameraOffsetX, 0);
-    p.draw();
-    ctx.restore();
-  });
-
-  // Draw finish line
-  drawFinishLine(cameraOffsetX);
-
-  // Update player
-  ctx.save();
-  ctx.translate(-cameraOffsetX, 0);
-  player.update(platforms);
-  ctx.restore();
-
-  // Check for win condition
-  if (player.x > finishLineX) {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#fff";
-    ctx.font = "40px Arial";
-    ctx.fillText("You reached the finish line!", 180, 200);
-  } else {
-    requestAnimationFrame(animate);
-  }
-}
-
-animate();
-
-// Controls
-window.addEventListener("keydown", e => {
-  keys[e.key] = true;
-  if (e.key === " " || e.key === "ArrowUp") player.jump();
-});
-window.addEventListener("keyup", e => keys[e.key] = false);
+document.getElementById('restart').addEventListener('click',()=>{player=new Player();enemies=[];powerups=[];frame=0;elapsed=0;running=true;difficulty=1;loop();});
+loop();
 </script>
 </body>
 </html>
