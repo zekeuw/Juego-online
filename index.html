@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple Platformer</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simple Platformer with Finish Line</title>
 <style>
   body {
     margin: 0;
     overflow: hidden;
-    background: #87CEEB; /* sky blue */
+    background: linear-gradient(#87ceeb, #b3e5fc);
   }
   canvas {
     display: block;
-    background: #b3e5fc;
   }
 </style>
 </head>
@@ -96,25 +95,94 @@ class Platform {
   }
 
   draw() {
-    ctx.fillStyle = "#3e2723";
+    ctx.fillStyle = "#5D4037";
     ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.fillStyle = "#795548";
+    ctx.fillRect(this.x, this.y, this.width, 5); // top edge
   }
 }
 
 const player = new Player();
+const levelLength = 2400;
 const platforms = [
-  new Platform(0, canvas.height - 30, canvas.width, 30),
+  new Platform(0, canvas.height - 30, levelLength, 30),
   new Platform(150, 350, 100, 15),
-  new Platform(350, 280, 120, 15),
-  new Platform(550, 200, 100, 15),
-  new Platform(700, 350, 100, 15),
+  new Platform(400, 280, 120, 15),
+  new Platform(650, 200, 100, 15),
+  new Platform(900, 330, 150, 15),
+  new Platform(1150, 270, 100, 15),
+  new Platform(1400, 230, 120, 15),
+  new Platform(1650, 300, 100, 15),
+  new Platform(1900, 250, 120, 15),
+  new Platform(2150, 350, 100, 15)
 ];
+
+// Finish line flag
+const finishLineX = levelLength - 100;
+
+function drawFinishLine(offsetX) {
+  const flagX = finishLineX - offsetX;
+  const flagY = canvas.height - 150;
+  ctx.fillStyle = "#555";
+  ctx.fillRect(flagX, flagY, 5, 120); // pole
+  ctx.fillStyle = "#FFD700";
+  ctx.beginPath();
+  ctx.moveTo(flagX + 5, flagY);
+  ctx.lineTo(flagX + 60, flagY + 20);
+  ctx.lineTo(flagX + 5, flagY + 40);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = "20px Arial";
+  ctx.fillStyle = "#000";
+  ctx.fillText("🏁", flagX + 15, flagY - 10);
+}
+
+let cameraOffsetX = 0;
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  platforms.forEach(p => p.draw());
+
+  // Smooth camera follow
+  cameraOffsetX = player.x - canvas.width / 2 + player.width / 2;
+  if (cameraOffsetX < 0) cameraOffsetX = 0;
+  if (cameraOffsetX > levelLength - canvas.width)
+    cameraOffsetX = levelLength - canvas.width;
+
+  // Draw background ground texture
+  ctx.fillStyle = "#4CAF50";
+  ctx.fillRect(-cameraOffsetX, canvas.height - 30, levelLength, 30);
+  ctx.fillStyle = "#2E7D32";
+  for (let i = 0; i < levelLength; i += 40) {
+    ctx.fillRect(i - cameraOffsetX, canvas.height - 25, 20, 5);
+  }
+
+  // Draw platforms
+  platforms.forEach(p => {
+    ctx.save();
+    ctx.translate(-cameraOffsetX, 0);
+    p.draw();
+    ctx.restore();
+  });
+
+  // Draw finish line
+  drawFinishLine(cameraOffsetX);
+
+  // Update player
+  ctx.save();
+  ctx.translate(-cameraOffsetX, 0);
   player.update(platforms);
-  requestAnimationFrame(animate);
+  ctx.restore();
+
+  // Check for win condition
+  if (player.x > finishLineX) {
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "40px Arial";
+    ctx.fillText("You reached the finish line!", 180, 200);
+  } else {
+    requestAnimationFrame(animate);
+  }
 }
 
 animate();
