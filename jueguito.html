@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Platformer</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #87CEEB; /* sky blue */
+  }
+  canvas {
+    display: block;
+    background: #b3e5fc;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 800;
+canvas.height = 450;
+
+const gravity = 0.6;
+let keys = {};
+
+class Player {
+  constructor() {
+    this.width = 40;
+    this.height = 60;
+    this.x = 100;
+    this.y = canvas.height - this.height - 50;
+    this.dy = 0;
+    this.speed = 5;
+    this.jumpPower = 12;
+    this.onGround = false;
+  }
+
+  draw() {
+    ctx.fillStyle = "#ff5733";
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+
+  update(platforms) {
+    // Horizontal movement
+    if (keys["ArrowRight"]) this.x += this.speed;
+    if (keys["ArrowLeft"]) this.x -= this.speed;
+
+    // Gravity
+    this.y += this.dy;
+    this.dy += gravity;
+
+    // Check platform collisions
+    this.onGround = false;
+    for (let p of platforms) {
+      if (
+        this.x < p.x + p.width &&
+        this.x + this.width > p.x &&
+        this.y + this.height <= p.y + this.dy &&
+        this.y + this.height + this.dy >= p.y
+      ) {
+        this.dy = 0;
+        this.y = p.y - this.height;
+        this.onGround = true;
+      }
+    }
+
+    // Floor limit
+    if (this.y + this.height > canvas.height) {
+      this.y = canvas.height - this.height;
+      this.dy = 0;
+      this.onGround = true;
+    }
+
+    this.draw();
+  }
+
+  jump() {
+    if (this.onGround) {
+      this.dy = -this.jumpPower;
+      this.onGround = false;
+    }
+  }
+}
+
+class Platform {
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+
+  draw() {
+    ctx.fillStyle = "#3e2723";
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+}
+
+const player = new Player();
+const platforms = [
+  new Platform(0, canvas.height - 30, canvas.width, 30),
+  new Platform(150, 350, 100, 15),
+  new Platform(350, 280, 120, 15),
+  new Platform(550, 200, 100, 15),
+  new Platform(700, 350, 100, 15),
+];
+
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  platforms.forEach(p => p.draw());
+  player.update(platforms);
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+// Controls
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (e.key === " " || e.key === "ArrowUp") player.jump();
+});
+window.addEventListener("keyup", e => keys[e.key] = false);
+</script>
+</body>
+</html>
